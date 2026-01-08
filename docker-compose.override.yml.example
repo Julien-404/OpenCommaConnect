@@ -1,0 +1,53 @@
+# Docker Compose Override Example
+# Copy this file to docker-compose.override.yml and customize as needed
+# This file is automatically loaded by docker-compose
+
+version: '3.8'
+
+services:
+  # Example: Custom port mappings
+  # api:
+  #   ports:
+  #     - "8080:8000"  # Map API to port 8080 instead of 8000
+
+  # Example: Resource limits for production
+  # api:
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '2'
+  #         memory: 4G
+  #       reservations:
+  #         cpus: '1'
+  #         memory: 2G
+
+  # Example: Add labels for Traefik
+  # api:
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.comma-api.rule=Host(`comma.example.com`) && PathPrefix(`/api`)"
+  #     - "traefik.http.routers.comma-api.entrypoints=websecure"
+  #     - "traefik.http.routers.comma-api.tls.certresolver=letsencrypt"
+
+  # Example: Mount additional volumes
+  # api:
+  #   volumes:
+  #     - ./custom-config:/app/config:ro
+
+  # Example: Environment overrides
+  # api:
+  #   environment:
+  #     - LOG_LEVEL=debug
+  #     - MAX_WORKERS=8
+
+  # Example: Use external network
+  # api:
+  #   networks:
+  #     - comma-network
+  #     - external-network
+
+# Example: Define external network
+# networks:
+#   external-network:
+#     external: true
+#     name: traefik-network

@@ -32,6 +32,7 @@ Thumbs.db
 
 # Docker
 *.log
+docker-compose.override.yml
 
 # Data directories
 database/backups/*.sql.gz

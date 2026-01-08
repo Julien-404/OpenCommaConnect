@@ -2,14 +2,23 @@
 
 Open-source implementation of the Comma Connect backend for self-hosting your openpilot data.
 
+## 🎯 Deployment Modes
+
+Comma Connect supports **flexible deployment configurations**:
+
+- **🔧 Direct Mode (Default)**: Services expose ports directly. Perfect for development or use with your own reverse proxy.
+- **🛡️ Built-in Proxy**: Use the included Nginx container with SSL support. Great for simple deployments.
+- **🌐 External Proxy**: Integrate with existing infrastructure (Traefik, Caddy, etc.). Ideal for production.
+
+📖 **See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed configuration guides**
+
 ## 🚀 Quick Start
 
 ### Prerequisites
 
 - Docker & Docker Compose installed
-- Domain name with DNS configured (or use localhost for testing)
-- SSL certificate (or use Let's Encrypt)
 - Minimum 8GB RAM, 4 CPU cores, 100GB storage
+- Domain name (optional, can use localhost for testing)
 
 ### Installation
 
@@ -28,10 +37,10 @@ nano .env
 
 3. **Generate secrets**
 ```bash
-# JWT Secret
+# JWT Secret (min 32 characters)
 openssl rand -base64 32
 
-# Postgres Password
+# Database Password
 openssl rand -base64 16
 
 # MinIO Password
@@ -39,21 +48,34 @@ openssl rand -base64 16
 ```
 
 4. **Start the services**
+
+**Option A: Direct Mode (Default - No built-in proxy)**
 ```bash
 docker-compose up -d
 ```
+Services available at:
+- Frontend: `http://localhost:3000`
+- API: `http://localhost:8000`
+- WebSocket: `ws://localhost:8001`
 
-5. **Initialize the database**
+**Option B: With Built-in Nginx Proxy**
 ```bash
-docker-compose exec api python manage.py migrate
-docker-compose exec api python manage.py createsuperuser
+docker-compose --profile with-proxy up -d
 ```
+Services available at:
+- All services: `http://localhost` (or your domain)
 
-6. **Access the application**
-- Frontend: `https://your-domain.com`
-- Admin: `https://your-domain.com/admin`
-- Grafana: `https://your-domain.com:3000`
-- MinIO Console: `https://your-domain.com:9001`
+5. **Access the application**
+
+Default mode:
+- Frontend: `http://localhost:3000`
+- Grafana: `http://localhost:3000`
+- MinIO Console: `http://localhost:9001`
+
+With proxy:
+- Frontend: `http://localhost` (or `https://your-domain.com`)
+- Grafana: `http://localhost:3000`
+- MinIO Console: `http://localhost:9001`
 
 ## 📋 Architecture
 
