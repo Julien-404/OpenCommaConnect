@@ -2,15 +2,29 @@
 
 Open-source implementation of the Comma Connect backend for self-hosting your openpilot data.
 
-## 🎯 Deployment Modes
+## ⚠️ Reverse Proxy Required
 
-Comma Connect supports **flexible deployment configurations**:
+**This project does NOT include a reverse proxy by default.**
 
-- **🔧 Direct Mode (Default)**: Services expose ports directly. Perfect for development or use with your own reverse proxy.
-- **🛡️ Built-in Proxy**: Use the included Nginx container with SSL support. Great for simple deployments.
-- **🌐 External Proxy**: Integrate with existing infrastructure (Traefik, Caddy, etc.). Ideal for production.
+You must provide your own reverse proxy to access the services securely. This design allows:
+- ✅ Integration with your existing infrastructure
+- ✅ Use of your preferred proxy (Traefik, Caddy, Nginx, etc.)
+- ✅ Flexibility for cloud deployments (AWS ALB, GCP LB, etc.)
+- ✅ No forced SSL configuration
 
-📖 **See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed configuration guides**
+**Recommended Reverse Proxies:**
+- 🌐 **Traefik** - Best for Docker, automatic SSL (Recommended)
+- 🚀 **Caddy** - Easiest, automatic HTTPS
+- ⚙️ **Nginx** - Most common, highly configurable
+- ☁️ **Cloud Load Balancers** - AWS ALB, GCP, Azure
+
+**Need a quick test proxy?**
+We provide an optional basic Nginx configuration:
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+```
+
+📖 **See [DEPLOYMENT.md](./DEPLOYMENT.md) and [examples/](./examples/) for reverse proxy configuration guides**
 
 ## 🚀 Quick Start
 
@@ -49,33 +63,33 @@ openssl rand -base64 16
 
 4. **Start the services**
 
-**Option A: Direct Mode (Default - No built-in proxy)**
 ```bash
 docker-compose up -d
 ```
-Services available at:
+
+This starts all backend services. They expose ports directly:
 - Frontend: `http://localhost:3000`
 - API: `http://localhost:8000`
 - WebSocket: `ws://localhost:8001`
+- Grafana: `http://localhost:3000`
+- MinIO Console: `http://localhost:9001`
 
-**Option B: With Built-in Nginx Proxy**
+5. **Configure your reverse proxy**
+
+⚠️ **Required for production**: Configure your reverse proxy to route traffic to the services above.
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for:
+- Traefik configuration
+- Caddy configuration
+- Nginx configuration
+- Cloud load balancer examples
+
+**For testing without a proxy:**
 ```bash
-docker-compose --profile with-proxy up -d
+# Optional: Use the built-in basic proxy
+docker-compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+# Access at: http://localhost
 ```
-Services available at:
-- All services: `http://localhost` (or your domain)
-
-5. **Access the application**
-
-Default mode:
-- Frontend: `http://localhost:3000`
-- Grafana: `http://localhost:3000`
-- MinIO Console: `http://localhost:9001`
-
-With proxy:
-- Frontend: `http://localhost` (or `https://your-domain.com`)
-- Grafana: `http://localhost:3000`
-- MinIO Console: `http://localhost:9001`
 
 ## 📋 Architecture
 

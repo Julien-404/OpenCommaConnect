@@ -2,12 +2,20 @@
 
 Get your Comma Connect server running in 5 minutes!
 
+## ⚠️ Before You Start
+
+**This project requires a reverse proxy** (Traefik, Caddy, Nginx, etc.)
+
+- For **production**: Use your existing reverse proxy (see [DEPLOYMENT.md](./DEPLOYMENT.md))
+- For **testing**: Use the optional built-in proxy (instructions below)
+
 ## Prerequisites
 
 - Docker and Docker Compose installed
 - Minimum 8GB RAM, 4 CPU cores
 - 100GB+ storage
-- Domain name (optional, can use localhost for testing)
+- **A reverse proxy** (Traefik, Caddy, Nginx, cloud LB, etc.)
+- Domain name (optional for testing)
 
 ## Installation
 
@@ -58,18 +66,36 @@ openssl rand -base64 16
 
 ### 4. Start the Server
 
+**Option A: With Your Own Reverse Proxy (Production)**
+
 ```bash
 docker-compose up -d
 ```
 
-This will start all services:
+This starts all backend services. Configure your reverse proxy to route traffic to:
+- Frontend: `localhost:3000`
+- API: `localhost:8000`
+- WebSocket: `ws://localhost:8001`
+
+See [examples/](./examples/) for Traefik, Caddy, and Nginx configurations.
+
+**Option B: For Testing Only (Built-in Proxy)**
+
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+```
+
+This includes a basic Nginx proxy. Access at `http://localhost`
+
+Services started:
 - API server
 - Athena WebSocket service
 - PostgreSQL database
 - Redis cache
 - MinIO object storage
-- Nginx reverse proxy
 - Monitoring stack (Prometheus, Grafana)
+- Frontend (React PWA)
+- Optional: Basic Nginx proxy (only with option B)
 
 ### 5. Wait for Services to Start
 

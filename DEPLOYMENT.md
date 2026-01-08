@@ -1,30 +1,85 @@
 # Deployment Guide
 
-This guide covers different deployment scenarios for Comma Connect.
+This guide covers reverse proxy configuration for Comma Connect.
+
+## ⚠️ Important
+
+**Comma Connect does NOT include a reverse proxy by default.**
+
+You **must** provide your own reverse proxy for:
+- SSL/TLS termination
+- Single entry point
+- Load balancing (optional)
+- Security (rate limiting, DDoS protection)
 
 ## Table of Contents
 
-1. [Deployment Modes](#deployment-modes)
-2. [Without Reverse Proxy (Direct)](#without-reverse-proxy-direct)
-3. [With Built-in Nginx Proxy](#with-built-in-nginx-proxy)
-4. [With External Reverse Proxy](#with-external-reverse-proxy)
+1. [Why No Built-in Proxy?](#why-no-built-in-proxy)
+2. [Recommended Reverse Proxies](#recommended-reverse-proxies)
+3. [Configuration Examples](#configuration-examples)
+   - [Traefik (Recommended)](#traefik-docker-labels)
+   - [Caddy](#caddy)
+   - [External Nginx](#external-nginx)
+4. [Optional Built-in Proxy](#optional-built-in-proxy)
 5. [Production Considerations](#production-considerations)
 
 ---
 
-## Deployment Modes
+## Why No Built-in Proxy?
 
-Comma Connect supports flexible deployment configurations:
+We don't include a reverse proxy by default because:
 
-- **Direct Mode** (default): Services expose ports directly, no built-in proxy
-- **Built-in Proxy Mode**: Use the included Nginx container
-- **External Proxy Mode**: Integrate with your existing reverse proxy (Traefik, Caddy, etc.)
+✅ **Flexibility**: Use your existing infrastructure
+✅ **Standards**: Most deployments already have a reverse proxy
+✅ **Choice**: Use Traefik, Caddy, Nginx, HAProxy, or cloud load balancers
+✅ **Simplicity**: One less container to manage if you don't need it
+✅ **Integration**: Works seamlessly with orchestrators (K8s, Swarm, Nomad)
 
 ---
 
-## Without Reverse Proxy (Direct)
+## Recommended Reverse Proxies
 
-This is the **default mode**. Each service exposes its port directly.
+### For Docker Users: Traefik ⭐ Recommended
+
+**Why Traefik:**
+- Automatic service discovery via Docker labels
+- Automatic SSL with Let's Encrypt
+- Built-in dashboard
+- Hot reloading (no restart needed)
+
+### For Simplicity: Caddy
+
+**Why Caddy:**
+- Automatic HTTPS (easiest)
+- Simple configuration file
+- Zero-config for basic setups
+
+### For Traditional Setups: Nginx
+
+**Why Nginx:**
+- Most widely used
+- Excellent performance
+- Maximum configurability
+- Familiar to most sysadmins
+
+### For Cloud: Native Load Balancers
+
+- AWS Application Load Balancer (ALB)
+- Google Cloud Load Balancer
+- Azure Application Gateway
+- Cloudflare Tunnel
+
+---
+
+## Configuration Examples
+
+All examples are in the [`examples/`](./examples/) directory.
+
+---
+
+## Default Mode: Services Without Proxy
+
+This is the **default mode**. Services expose ports directly and wait for your reverse proxy.
 
 ### Configuration
 
@@ -69,70 +124,55 @@ docker-compose up -d
 
 ---
 
-## With Built-in Nginx Proxy
+## Optional Built-in Proxy (For Testing Only)
 
-Use the included Nginx container for a unified entry point.
+⚠️ **Not recommended for production** - Use your own reverse proxy instead.
+
+We provide a basic Nginx configuration for quick testing:
+
+### Start with Optional Proxy
+
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+```
+
+This adds a simple Nginx reverse proxy container.
 
 ### Configuration
 
 Edit `.env`:
 
 ```bash
-# Enable built-in proxy
 NGINX_HTTP_PORT=80
 NGINX_HTTPS_PORT=443
-
-# Frontend URLs (through proxy)
-FRONTEND_API_URL=https://your-domain.com
-FRONTEND_WS_URL=wss://your-domain.com
-
-# Domain
-DOMAIN=your-domain.com
-ENABLE_HTTPS=true
+FRONTEND_API_URL=http://localhost
+FRONTEND_WS_URL=ws://localhost
 ```
 
-### Start Services with Proxy Profile
+### SSL for Testing
+
+Self-signed certificates are generated automatically. For real certificates:
 
 ```bash
-docker-compose --profile with-proxy up -d
-```
-
-### SSL Configuration
-
-For production, replace self-signed certificates:
-
-```bash
-# Place your certificates
 cp your-cert.pem nginx/ssl/cert.pem
 cp your-key.pem nginx/ssl/key.pem
-
-# Restart nginx
-docker-compose restart nginx
+docker-compose -f docker-compose.yml -f docker-compose.proxy.yml restart nginx
 ```
 
-### Access Points
+### Why Not Use This in Production?
 
-All services through single domain:
-- Frontend: `https://your-domain.com`
-- API: `https://your-domain.com/api/v1`
-- WebSocket: `wss://your-domain.com/ws`
-- Grafana: `https://your-domain.com/grafana`
+- ❌ Basic configuration, not optimized
+- ❌ Manual SSL certificate management
+- ❌ No automatic renewal (Let's Encrypt)
+- ❌ Limited security features
+- ❌ No service discovery
+- ❌ Harder to scale
 
-### Pros
-
-- ✅ Single entry point
-- ✅ Built-in SSL support
-- ✅ Rate limiting configured
-- ✅ CORS handled
-
-### Cons
-
-- ❌ Additional container to manage
-- ❌ Less flexible than external proxy
+**Better alternatives**: Traefik, Caddy, managed Nginx, or cloud load balancers.
 
 ---
 
-## With External Reverse Proxy
+## With Your Own Reverse Proxy (Recommended)
 
 Use your existing reverse proxy (Traefik, Caddy, Nginx, etc.).
 

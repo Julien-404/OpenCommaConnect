@@ -5,30 +5,14 @@ version: '3.8'
 
 services:
   # ============================================
-  # REVERSE PROXY & SSL (Optional - use profile to enable)
-  # If you have your own reverse proxy, don't use this service
-  # To enable: docker-compose --profile with-proxy up -d
+  # NOTE: No built-in reverse proxy by default
   # ============================================
-  nginx:
-    image: nginx:alpine
-    container_name: comma-nginx
-    profiles: ["with-proxy"]
-    ports:
-      - "${NGINX_HTTP_PORT:-80}:80"
-      - "${NGINX_HTTPS_PORT:-443}:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-      - ./nginx/logs:/var/log/nginx
-      - frontend-build:/usr/share/nginx/html:ro
-    depends_on:
-      - api
-      - athena
-      - tile-server
-      - frontend
-    networks:
-      - comma-network
-    restart: unless-stopped
+  # You should use your own reverse proxy (Traefik, Caddy, Nginx, etc.)
+  # See DEPLOYMENT.md for configuration examples
+  #
+  # If you need a basic reverse proxy:
+  # docker-compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+  # ============================================
 
   # ============================================
   # API SERVICE
