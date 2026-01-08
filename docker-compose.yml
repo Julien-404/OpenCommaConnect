@@ -1,0 +1,467 @@
+version: '3.8'
+
+# Comma Connect Self-Hosted Server
+# Complete Docker Compose Configuration
+
+services:
+  # ============================================
+  # REVERSE PROXY & SSL
+  # ============================================
+  nginx:
+    image: nginx:alpine
+    container_name: comma-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/logs:/var/log/nginx
+      - frontend-build:/usr/share/nginx/html:ro
+    depends_on:
+      - api
+      - athena
+      - tile-server
+      - frontend
+    networks:
+      - comma-network
+    restart: unless-stopped
+
+  # ============================================
+  # API SERVICE
+  # ============================================
+  api:
+    build:
+      context: ./backend/api
+      dockerfile: Dockerfile
+    container_name: comma-api
+    environment:
+      - DATABASE_URL=postgresql://comma:${POSTGRES_PASSWORD}@postgres:5432/commaconnect
+      - REDIS_URL=redis://redis:6379/0
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - MINIO_BUCKET=comma-uploads
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION=3600
+      - REFRESH_TOKEN_EXPIRATION=2592000
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - DOMAIN=${DOMAIN}
+      - ENABLE_HTTPS=${ENABLE_HTTPS:-true}
+      - ENABLE_REGISTRATION=${ENABLE_REGISTRATION:-true}
+      - MAX_UPLOAD_SIZE=10737418240
+    volumes:
+      - ./backend/api:/app
+      - api-logs:/var/log/api
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    networks:
+      - comma-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================
+  # ATHENA WEBSOCKET SERVICE
+  # ============================================
+  athena:
+    build:
+      context: ./backend/athena
+      dockerfile: Dockerfile
+    container_name: comma-athena
+    environment:
+      - DATABASE_URL=postgresql://comma:${POSTGRES_PASSWORD}@postgres:5432/commaconnect
+      - REDIS_URL=redis://redis:6379/1
+      - JWT_SECRET=${JWT_SECRET}
+      - WEBSOCKET_PORT=8001
+    volumes:
+      - ./backend/athena:/app
+      - athena-logs:/var/log/athena
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - comma-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================
+  # BACKGROUND WORKERS
+  # ============================================
+  worker:
+    build:
+      context: ./backend/worker
+      dockerfile: Dockerfile
+    container_name: comma-worker
+    environment:
+      - DATABASE_URL=postgresql://comma:${POSTGRES_PASSWORD}@postgres:5432/commaconnect
+      - REDIS_URL=redis://redis:6379/2
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - MINIO_BUCKET=comma-uploads
+      - CELERY_BROKER_URL=redis://redis:6379/3
+      - CELERY_RESULT_BACKEND=redis://redis:6379/4
+    volumes:
+      - ./backend/worker:/app
+      - worker-logs:/var/log/worker
+      - worker-temp:/tmp/worker
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    networks:
+      - comma-network
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+  # ============================================
+  # FRONTEND (React PWA)
+  # ============================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_URL=https://${DOMAIN}
+        - REACT_APP_WS_URL=wss://${DOMAIN}
+        - REACT_APP_MAPBOX_TOKEN=${MAPBOX_TOKEN}
+    container_name: comma-frontend
+    volumes:
+      - frontend-build:/app/build
+    networks:
+      - comma-network
+
+  # ============================================
+  # DATABASE
+  # ============================================
+  postgres:
+    image: postgis/postgis:15-3.3-alpine
+    container_name: comma-postgres
+    environment:
+      - POSTGRES_USER=comma
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=commaconnect
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale=en_US.UTF-8
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+      - ./database/backups:/backups
+    networks:
+      - comma-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U comma"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=1GB"
+      - "-c"
+      - "work_mem=16MB"
+      - "-c"
+      - "maintenance_work_mem=128MB"
+
+  # ============================================
+  # REDIS CACHE
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: comma-redis
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - comma-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # ============================================
+  # OBJECT STORAGE (MinIO)
+  # ============================================
+  minio:
+    image: minio/minio:latest
+    container_name: comma-minio
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    networks:
+      - comma-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # MinIO initialization (create buckets)
+  minio-init:
+    image: minio/mc:latest
+    container_name: comma-minio-init
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 10;
+      /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD};
+      /usr/bin/mc mb myminio/comma-uploads --ignore-existing;
+      /usr/bin/mc mb myminio/comma-thumbnails --ignore-existing;
+      /usr/bin/mc mb myminio/comma-processed --ignore-existing;
+      /usr/bin/mc policy set download myminio/comma-thumbnails;
+      exit 0;
+      "
+    networks:
+      - comma-network
+
+  # ============================================
+  # MAP TILE SERVER
+  # ============================================
+  tile-server:
+    image: maptiler/tileserver-gl:latest
+    container_name: comma-tiles
+    volumes:
+      - ./maps/data:/data
+      - ./maps/styles:/styles
+    environment:
+      - TILESERVER_PORT=8080
+    ports:
+      - "8080:8080"
+    networks:
+      - comma-network
+    restart: unless-stopped
+
+  # ============================================
+  # ROUTING ENGINE (OSRM)
+  # ============================================
+  routing:
+    image: osrm/osrm-backend:latest
+    container_name: comma-routing
+    volumes:
+      - osrm-data:/data
+    command: osrm-routed --algorithm mld /data/map.osrm --max-table-size 10000
+    ports:
+      - "5000:5000"
+    networks:
+      - comma-network
+    restart: unless-stopped
+    depends_on:
+      - routing-prepare
+
+  # OSRM Data Preparation (runs once)
+  routing-prepare:
+    image: osrm/osrm-backend:latest
+    container_name: comma-routing-prepare
+    volumes:
+      - osrm-data:/data
+      - ./maps/osm:/osm:ro
+    entrypoint: >
+      /bin/sh -c "
+      if [ ! -f /data/map.osrm ]; then
+        echo 'Preparing routing data...';
+        osrm-extract -p /opt/car.lua /osm/map.osm.pbf;
+        osrm-partition /data/map.osrm;
+        osrm-customize /data/map.osrm;
+        echo 'Routing data prepared';
+      else
+        echo 'Routing data already exists';
+      fi;
+      "
+    networks:
+      - comma-network
+
+  # ============================================
+  # GEOCODING SERVICE (Nominatim)
+  # ============================================
+  geocoder:
+    image: mediagis/nominatim:latest
+    container_name: comma-geocoder
+    environment:
+      - PBF_URL=${OSM_PBF_URL:-https://download.geofabrik.de/north-america/us/california-latest.osm.pbf}
+      - REPLICATION_URL=${OSM_REPLICATION_URL:-https://download.geofabrik.de/north-america/us/california-updates/}
+      - IMPORT_WIKIPEDIA=false
+      - NOMINATIM_PASSWORD=${NOMINATIM_PASSWORD}
+    volumes:
+      - nominatim-data:/var/lib/postgresql/12/main
+    ports:
+      - "8081:8080"
+    networks:
+      - comma-network
+    restart: unless-stopped
+    shm_size: 1g
+
+  # ============================================
+  # MONITORING - PROMETHEUS
+  # ============================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: comma-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    ports:
+      - "9090:9090"
+    networks:
+      - comma-network
+    restart: unless-stopped
+
+  # ============================================
+  # MONITORING - GRAFANA
+  # ============================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: comma-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://${DOMAIN}/grafana
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - comma-network
+    restart: unless-stopped
+
+  # ============================================
+  # LOG AGGREGATION - LOKI
+  # ============================================
+  loki:
+    image: grafana/loki:latest
+    container_name: comma-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - comma-network
+    restart: unless-stopped
+
+  # ============================================
+  # LOG SHIPPER - PROMTAIL
+  # ============================================
+  promtail:
+    image: grafana/promtail:latest
+    container_name: comma-promtail
+    volumes:
+      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - api-logs:/var/log/api:ro
+      - athena-logs:/var/log/athena:ro
+      - worker-logs:/var/log/worker:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - comma-network
+    restart: unless-stopped
+
+  # ============================================
+  # DATABASE BACKUP
+  # ============================================
+  backup:
+    image: prodrigestivill/postgres-backup-local:latest
+    container_name: comma-backup
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=commaconnect
+      - POSTGRES_USER=comma
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - SCHEDULE=@daily
+      - BACKUP_KEEP_DAYS=7
+      - BACKUP_KEEP_WEEKS=4
+      - BACKUP_KEEP_MONTHS=6
+      - HEALTHCHECK_PORT=8080
+    volumes:
+      - ./database/backups:/backups
+    depends_on:
+      - postgres
+    networks:
+      - comma-network
+    restart: unless-stopped
+
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  comma-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ============================================
+# VOLUMES
+# ============================================
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  minio-data:
+    driver: local
+  osrm-data:
+    driver: local
+  nominatim-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  loki-data:
+    driver: local
+  frontend-build:
+    driver: local
+  api-logs:
+    driver: local
+  athena-logs:
+    driver: local
+  worker-logs:
+    driver: local
+  worker-temp:
+    driver: local
