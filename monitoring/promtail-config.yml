@@ -1,0 +1,46 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # API logs
+  - job_name: api
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: api
+          __path__: /var/log/api/*.log
+
+  # Athena logs
+  - job_name: athena
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: athena
+          __path__: /var/log/athena/*.log
+
+  # Worker logs
+  - job_name: worker
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: worker
+          __path__: /var/log/worker/*.log
+
+  # System logs
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: system
+          __path__: /var/log/*.log

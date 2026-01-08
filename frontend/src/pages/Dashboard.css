@@ -1,0 +1,51 @@
+.dashboard {
+  padding: 20px;
+}
+
+.dashboard h1 {
+  margin-bottom: 30px;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 40px;
+}
+
+.stat-value {
+  font-size: 48px;
+  font-weight: bold;
+  color: #007bff;
+  margin: 20px 0;
+}
+
+.recent-routes {
+  margin-top: 40px;
+}
+
+.routes-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.route-item {
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.route-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.route-item h4 {
+  margin-bottom: 10px;
+}
+
+.route-item p {
+  margin: 5px 0;
+  color: #666;
+  font-size: 14px;
+}
