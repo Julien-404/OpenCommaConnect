@@ -1,0 +1,49 @@
+# Example: Traefik Integration
+# This shows how to integrate Comma Connect with Traefik reverse proxy
+
+version: '3.8'
+
+services:
+  api:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.comma-api.rule=Host(`comma.example.com`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.comma-api.entrypoints=websecure"
+      - "traefik.http.routers.comma-api.tls=true"
+      - "traefik.http.routers.comma-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.comma-api.loadbalancer.server.port=8000"
+      # Remove port exposure if Traefik is on same network
+    ports: []
+    networks:
+      - traefik-network
+      - comma-network
+
+  athena:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.comma-ws.rule=Host(`comma.example.com`) && PathPrefix(`/ws`)"
+      - "traefik.http.routers.comma-ws.entrypoints=websecure"
+      - "traefik.http.routers.comma-ws.tls=true"
+      - "traefik.http.routers.comma-ws.tls.certresolver=letsencrypt"
+      - "traefik.http.services.comma-ws.loadbalancer.server.port=8001"
+    ports: []
+    networks:
+      - traefik-network
+      - comma-network
+
+  frontend:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.comma-frontend.rule=Host(`comma.example.com`)"
+      - "traefik.http.routers.comma-frontend.entrypoints=websecure"
+      - "traefik.http.routers.comma-frontend.tls=true"
+      - "traefik.http.routers.comma-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.comma-frontend.loadbalancer.server.port=80"
+    ports: []
+    networks:
+      - traefik-network
+      - comma-network
+
+networks:
+  traefik-network:
+    external: true

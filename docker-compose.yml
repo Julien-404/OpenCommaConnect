@@ -5,27 +5,14 @@ version: '3.8'
 
 services:
   # ============================================
-  # REVERSE PROXY & SSL
+  # NOTE: No built-in reverse proxy by default
   # ============================================
-  nginx:
-    image: nginx:alpine
-    container_name: comma-nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-      - ./nginx/logs:/var/log/nginx
-      - frontend-build:/usr/share/nginx/html:ro
-    depends_on:
-      - api
-      - athena
-      - tile-server
-      - frontend
-    networks:
-      - comma-network
-    restart: unless-stopped
+  # You should use your own reverse proxy (Traefik, Caddy, Nginx, etc.)
+  # See DEPLOYMENT.md for configuration examples
+  #
+  # If you need a basic reverse proxy:
+  # docker-compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+  # ============================================
 
   # ============================================
   # API SERVICE
@@ -35,6 +22,9 @@ services:
       context: ./backend/api
       dockerfile: Dockerfile
     container_name: comma-api
+    # Expose port directly if not using nginx proxy
+    ports:
+      - "${API_PORT:-8000}:8000"
     environment:
       - DATABASE_URL=postgresql://comma:${POSTGRES_PASSWORD}@postgres:5432/commaconnect
       - REDIS_URL=redis://redis:6379/0
@@ -48,7 +38,7 @@ services:
       - API_HOST=0.0.0.0
       - API_PORT=8000
       - DOMAIN=${DOMAIN}
-      - ENABLE_HTTPS=${ENABLE_HTTPS:-true}
+      - ENABLE_HTTPS=${ENABLE_HTTPS:-false}
       - ENABLE_REGISTRATION=${ENABLE_REGISTRATION:-true}
       - MAX_UPLOAD_SIZE=10737418240
     volumes:
@@ -76,6 +66,9 @@ services:
       context: ./backend/athena
       dockerfile: Dockerfile
     container_name: comma-athena
+    # Expose port directly if not using nginx proxy
+    ports:
+      - "${ATHENA_PORT:-8001}:8001"
     environment:
       - DATABASE_URL=postgresql://comma:${POSTGRES_PASSWORD}@postgres:5432/commaconnect
       - REDIS_URL=redis://redis:6379/1
@@ -142,10 +135,13 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - REACT_APP_API_URL=https://${DOMAIN}
-        - REACT_APP_WS_URL=wss://${DOMAIN}
+        - REACT_APP_API_URL=${FRONTEND_API_URL:-http://localhost:8000}
+        - REACT_APP_WS_URL=${FRONTEND_WS_URL:-ws://localhost:8001}
         - REACT_APP_MAPBOX_TOKEN=${MAPBOX_TOKEN}
     container_name: comma-frontend
+    # Expose port directly if not using nginx proxy
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
     volumes:
       - frontend-build:/app/build
     networks:

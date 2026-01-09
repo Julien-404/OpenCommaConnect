@@ -2,14 +2,37 @@
 
 Open-source implementation of the Comma Connect backend for self-hosting your openpilot data.
 
+## ⚠️ Reverse Proxy Required
+
+**This project does NOT include a reverse proxy by default.**
+
+You must provide your own reverse proxy to access the services securely. This design allows:
+- ✅ Integration with your existing infrastructure
+- ✅ Use of your preferred proxy (Traefik, Caddy, Nginx, etc.)
+- ✅ Flexibility for cloud deployments (AWS ALB, GCP LB, etc.)
+- ✅ No forced SSL configuration
+
+**Recommended Reverse Proxies:**
+- 🌐 **Traefik** - Best for Docker, automatic SSL (Recommended)
+- 🚀 **Caddy** - Easiest, automatic HTTPS
+- ⚙️ **Nginx** - Most common, highly configurable
+- ☁️ **Cloud Load Balancers** - AWS ALB, GCP, Azure
+
+**Need a quick test proxy?**
+We provide an optional basic Nginx configuration:
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+```
+
+📖 **See [DEPLOYMENT.md](./DEPLOYMENT.md) and [examples/](./examples/) for reverse proxy configuration guides**
+
 ## 🚀 Quick Start
 
 ### Prerequisites
 
 - Docker & Docker Compose installed
-- Domain name with DNS configured (or use localhost for testing)
-- SSL certificate (or use Let's Encrypt)
 - Minimum 8GB RAM, 4 CPU cores, 100GB storage
+- Domain name (optional, can use localhost for testing)
 
 ### Installation
 
@@ -28,10 +51,10 @@ nano .env
 
 3. **Generate secrets**
 ```bash
-# JWT Secret
+# JWT Secret (min 32 characters)
 openssl rand -base64 32
 
-# Postgres Password
+# Database Password
 openssl rand -base64 16
 
 # MinIO Password
@@ -39,21 +62,34 @@ openssl rand -base64 16
 ```
 
 4. **Start the services**
+
 ```bash
 docker-compose up -d
 ```
 
-5. **Initialize the database**
-```bash
-docker-compose exec api python manage.py migrate
-docker-compose exec api python manage.py createsuperuser
-```
+This starts all backend services. They expose ports directly:
+- Frontend: `http://localhost:3000`
+- API: `http://localhost:8000`
+- WebSocket: `ws://localhost:8001`
+- Grafana: `http://localhost:3000`
+- MinIO Console: `http://localhost:9001`
 
-6. **Access the application**
-- Frontend: `https://your-domain.com`
-- Admin: `https://your-domain.com/admin`
-- Grafana: `https://your-domain.com:3000`
-- MinIO Console: `https://your-domain.com:9001`
+5. **Configure your reverse proxy**
+
+⚠️ **Required for production**: Configure your reverse proxy to route traffic to the services above.
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for:
+- Traefik configuration
+- Caddy configuration
+- Nginx configuration
+- Cloud load balancer examples
+
+**For testing without a proxy:**
+```bash
+# Optional: Use the built-in basic proxy
+docker-compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+# Access at: http://localhost
+```
 
 ## 📋 Architecture
 
